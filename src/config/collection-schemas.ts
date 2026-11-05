@@ -1,4 +1,5 @@
 import { MongoServerError, type Db, type Document } from "mongodb";
+import { isDeepStrictEqual } from "node:util";
 import { categories } from "../types/library.js";
 
 const text = { bsonType: "string", minLength: 1 };
@@ -52,8 +53,8 @@ export const borrowValidator = {
   ],
 };
 
-// Explicit setup only, not per-request. Update validation in place; never drop
-// an existing collection or delete records to make setup succeed.
+// Explicit setup only. Existing validation is checked, never silently replaced.
+// This keeps repeated checks usable with a database-scoped readWrite account.
 export async function ensureCollectionSchemas(db: Db) {
   for (const [name, validator] of [["books", bookValidator], ["borrows", borrowValidator]] as const) {
     const options = { validator: validator as Document, validationLevel: "strict" as const, validationAction: "error" as const };
@@ -61,7 +62,12 @@ export async function ensureCollectionSchemas(db: Db) {
       await db.createCollection(name, options);
     } catch (error) {
       if (!(error instanceof MongoServerError) || error.code !== 48) throw error;
-      await db.command({ collMod: name, ...options });
+      const existing = await db.listCollections({ name }, { nameOnly: false }).next();
+      if (!isDeepStrictEqual(existing?.options?.validator, validator)
+        || existing?.options?.validationLevel !== "strict"
+        || existing?.options?.validationAction !== "error") {
+        throw Object.assign(new Error(`Existing ${name} validation requires review before setup can continue.`), { code: "SCHEMA_REVIEW_REQUIRED" });
+      }
     }
   }
 }

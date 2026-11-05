@@ -14,7 +14,8 @@ try {
   }
 } catch (error) {
   const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "number" ? error.code : undefined;
-  console.error(code === 11000
+  const schemaReview = typeof error === "object" && error !== null && "code" in error && error.code === "SCHEMA_REVIEW_REQUIRED";
+  console.error(schemaReview ? "FAIL: existing collection validation differs. Review it before updating; nothing was overwritten." : code === 11000
     ? "FAIL: existing duplicate records prevent the unique loan index. Review them; no records were deleted."
     : `FAIL: database checks did not complete${code ? ` (MongoDB code ${code})` : ""}. Verify private settings, permissions, network access, and transaction support.`);
   process.exitCode = 1;
