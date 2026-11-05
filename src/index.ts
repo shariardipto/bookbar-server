@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { createApp } from "./app.js";
 import { parseEnv } from "./config/env.js";
+import { closeDatabase } from "./config/database.js";
 
 dotenv.config({ quiet: true });
 
@@ -16,8 +17,14 @@ server.on("error", () => {
 });
 
 function shutdown() {
-  server.close(() => {
-    process.exitCode = 0;
+  server.close(async () => {
+    try {
+      await closeDatabase();
+      process.exitCode = 0;
+    } catch {
+      console.error("BookBar could not close its database connection cleanly.");
+      process.exitCode = 1;
+    }
   });
   setTimeout(() => process.exit(1), 10_000).unref();
 }
