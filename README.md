@@ -2,7 +2,7 @@
 
 The separate Express + TypeScript backend for the BookBar online library. Better Auth sessions belong to the Next.js client project; this API will validate service JWTs and enforce book ownership, borrowing, and inventory rules.
 
-**Current phase:** P02 data layer implemented; live Atlas verification is pending owner setup. Connections, typed book/loan contracts, input validation, collection validators, indexes, and safe database checks are ready. JWT and business endpoints remain future work. The HTTP API still serves its P00 readiness response until P04.
+**Current phase:** P02 DONE. Both applications connect to Atlas; collection validators, required indexes, transaction support/rollback, inventory constraints and unique active-loan enforcement pass the live acceptance command. JWT and business endpoints remain future work. The HTTP API still serves its P00 readiness response until P04.
 
 **Live API:** Not deployed; deployment is scheduled for P08. A local `origin` remote is configured. No push is performed during P01.
 
@@ -25,7 +25,7 @@ Check http://localhost:5000/books. Expected P00 response: HTTP 503, `success: fa
 
 Set `MONGODB_URI` privately in ignored `.env` and use `MONGODB_DB_NAME=bookbar`. Restart the server after changing settings. Run `npm run db:check`: it builds the server, connects, creates/checks `books`/`borrows` validation and indexes, and checks actual transaction/write/read/rollback, sort/limit, inventory validation, and duplicate-loan enforcement. All probe writes use explicitly aborted transactions; no probe data is committed and no customer documents are deleted. Existing incompatible validation/indexes/duplicates cause failure rather than overwriting rules or destructive cleanup. Repeated checks need no admin-only `collMod` action; use read/write access scoped to `bookbar`. Better Auth collections are managed by its Next.js adapter, not this script.
 
-No URI, password, or document content is printed. Missing configuration returns `BLOCKED_MANUAL` and exit code 2; a failed live check returns 1; only real successful checks report PASS. Until this command and the client's `npm run db:check` pass against Atlas, P02 is not complete. Unit tests do not replace live checks. The driver is MongoDB 7.8.0.
+No URI, password, or document content is printed. Missing configuration returns `BLOCKED_MANUAL` and exit code 2; a failed live check returns 1; only real successful checks report PASS. This command and the client's `npm run db:check` both passed after the latest Atlas IP-access update, completing P02. Unit tests do not replace live checks. The driver is MongoDB 7.8.0.
 
 Current coordination state lives in workspace `../docs/ACTIVE_CONTEXT.md`; existing repository logs are historical snapshots and are no longer copied after every phase.
 
