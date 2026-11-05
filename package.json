@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:check": "npm run build && node dist/scripts/check-database.js",
-    "api:check": "tsx tests/live-api.integration.ts"
+    "api:check": "tsx tests/live-api.integration.ts",
+    "borrow:check": "tsx tests/live-borrows.integration.ts"
   },
   "dependencies": {
     "cors": "2.8.6",

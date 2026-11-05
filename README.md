@@ -2,7 +2,7 @@
 
 The separate Express + TypeScript backend for BookBar. Better Auth sessions belong to Next.js; this API verifies service JWTs and enforces ownership and inventory rules.
 
-**Current phase:** P04 implementation and live acceptance pass. Exactly eight routes provide public book summaries, authenticated book CRUD, owner-only edits/deletes and member-filtered borrow reads. Borrow/return mutations deliberately return 501 until P05 implements their transactions. P02 remains DONE.
+**Current phase:** P05 DONE. All eight routes are implemented, including transactional borrowing/returns, duplicate prevention, accurate stock, owner/borrower authorization and safe book edits/deletion. Targeted live Atlas concurrency and rollback acceptance passes. The browser library screens connect to these APIs in P06.
 
 **Live API:** Not deployed; deployment is scheduled for P08. Changes are committed locally; no push is performed in this phase.
 
@@ -44,25 +44,36 @@ Current coordination state lives in workspace `../docs/ACTIVE_CONTEXT.md`; exist
 | `npm run typecheck` | Strict checks for runtime, test, and configuration code |
 | `npm test` | Vitest + Supertest unit/contract checks |
 | `npm run api:check` | Opt-in real Next/Atlas acceptance using temporary probe accounts and records |
+| `npm run borrow:check` | Focused Atlas borrow/return, concurrency, rollback and cleanup acceptance |
 
 ## API contract
 
-| Method | Route | P04 behavior |
+| Method | Route | Current behavior |
 | --- | --- | --- |
 | GET | `/books` | Public summaries; `mine=true` requires JWT; newest first; optional `sort=latest&limit=6` |
 | GET | `/books/:id` | Private full details; 400/401/404 |
 | POST | `/books` | JWT-derived owner/timestamps, initial copies = totalCopies; 201 |
 | PATCH | `/books/:id` | Owner only; transactional inventory checks; 200/403/404/409 |
 | DELETE | `/books/:id` | Owner only; rejects active loans or inconsistent inventory; 200/403/404/409 |
-| POST | `/borrows` | JWT and validated bookId; 404 if missing; otherwise 501 pending P05 |
+| POST | `/borrows` | Transactional loan + copies decrement; 201; missing book 404; duplicate/unavailable/conflict 409 |
 | GET | `/borrows` | Only the verified user's active loans; newest first |
-| DELETE | `/borrows/:id` | JWT/ID/borrower checks; 403/404 or 501 pending P05; stock unchanged |
+| DELETE | `/borrows/:id` | Borrower-only transactional loan deletion + one copies increment; 200/403/404/409 |
 
 Success responses are `{ success: true, data }`; ObjectIds serialize as hex strings and dates as ISO strings. Book listing includes `_id`, title, author, category, imageUrl, copies, totalCopies and createdAt, without owner email or description. `limit` accepts 1–100; omit it to retrieve all summaries. Unknown query parameters, identity/email filters, malformed IDs, invalid inputs and caller-owned fields return 400. Request book fields are title, author, category, imageUrl, description and totalCopies; PATCH accepts a nonempty subset.
 
 Failures use `{ success: false, message, error: { code, details? } }`. Validation details contain field/message pairs. Missing/invalid auth is 401, forbidden ownership 403, missing records 404, inventory conflicts 409, malformed JSON 400, oversized bodies 413 and unexpected failures a sanitized 500. Private responses use `Cache-Control: private, no-store`. CORS advertises only `CLIENT_ORIGIN`; it does not replace JWT verification.
 
 P04 verification: `npm test -- tests/jwt.test.ts tests/api-contract.test.ts tests/app.test.ts` runs the 54 focused unit/HTTP checks. `npm run api:check` requires the local Next app, Atlas and dev dependencies. It creates uniquely named temporary users/books/loans, obtains real tokens, exercises CRUD/authorization/inventory conflicts, then verifies removal of only its own probe users/accounts/sessions/books/loans. It prints fixed PASS/FAIL summaries. Unlike P02's aborted probes, these are committed test fixtures removed in `finally`; it never deletes arbitrary library records or prints credentials.
+
+## Borrowing and inventory
+
+Borrowing checks the member's existing loan and stock consistency inside a snapshot/majority transaction. A positive-stock filter with `$inc: { copies: -1 }` and the unique `(bookId,userId)` index prevent over-allocation and duplicate active loans. The loan stores the book snapshot, signed borrower identity, server time and a due date seven days later. `totalCopies` does not change.
+
+Returning checks borrower ownership and inventory, deletes the active loan once, then applies a guarded `$inc: { copies: 1 }` in the same transaction. A repeated return finds no active loan and cannot increment stock. Book edit/delete transactions preserve active-loan counts; deletion stays blocked until all loans are returned.
+
+The shared transaction helper permits at most three work attempts after labeled transient aborts, with jitter, and three commit calls for an uncertain outcome. It never replays work after an unknown commit result; exhausted uncertainty returns 503 `TRANSACTION_COMMIT_UNKNOWN` and asks the caller to refresh before retrying. Exhausted transient conflicts return 409 `TRANSACTION_CONFLICT`. Each commit uses `maxCommitTimeMS=5000`; deprecated driver `timeoutMS` options are not used. See MongoDB's [transaction guide](https://www.mongodb.com/docs/drivers/node/current/crud/transactions/) and [commit/retry specification](https://specifications.readthedocs.io/en/latest/transactions-convenient-api/transactions-convenient-api/).
+
+P05 checks: `npm test -- tests/transaction.test.ts tests/api-contract.test.ts` (41 checks), affected lint/typecheck/build, then `npm run borrow:check`. The focused live command uses actual Atlas and production HTTP/services with signed synthetic identities and a local trusted-key resolver; it does not start Next or recreate provider accounts. P04 separately established the real Next/JWKS path. It tests last-copy and same-user races, concurrent/repeated returns, borrower filtering, resizing/deletion races and real MongoDB write failures. Test-only collection wrappers deliberately submit invalid writes/hints for rollback probes; production has no failure hooks. Finally it removes only its uniquely marked probe books/loans and verifies absence. No credentials, JWTs or raw responses are printed.
 
 ## Documentation and delivery
 
