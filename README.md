@@ -1,12 +1,12 @@
 # BookBar API
 
-The separate Express + TypeScript backend for the BookBar online library. Better Auth sessions belong to the Next.js client project; this API will validate service JWTs and enforce book ownership, borrowing, and inventory rules.
+The separate Express + TypeScript backend for BookBar. Better Auth sessions belong to Next.js; this API verifies service JWTs and enforces ownership and inventory rules.
 
-**Current phase:** P02 DONE. Both applications connect to Atlas; collection validators, required indexes, transaction support/rollback, inventory constraints and unique active-loan enforcement pass the live acceptance command. JWT and business endpoints remain future work. The HTTP API still serves its P00 readiness response until P04.
+**Current phase:** P04 implementation and live acceptance pass. Exactly eight routes provide public book summaries, authenticated book CRUD, owner-only edits/deletes and member-filtered borrow reads. Borrow/return mutations deliberately return 501 until P05 implements their transactions. P02 remains DONE.
 
-**Live API:** Not deployed; deployment is scheduled for P08. A local `origin` remote is configured. No push is performed during P01.
+**Live API:** Not deployed; deployment is scheduled for P08. Changes are committed locally; no push is performed in this phase.
 
-The client public interface is complete for P01, with explicitly labeled sample data. This API remains at its verified P00 baseline; see the shared implementation log for current project progress. P01 adds no Express routes or business logic.
+The browser catalog still uses labeled fixtures until P06. The API itself now reads and writes real MongoDB records. P03 Google callback/browser refresh acceptance remains a separate pending verification; P04 live tests use real email sessions and Next-issued JWTs.
 
 ## Local setup
 
@@ -17,9 +17,13 @@ npm ci --include=dev
 npm run dev
 ```
 
-The process listens on port 5000 by default. No credentials or `.env` file are required for P00. For local overrides, copy `.env.example` to ignored `.env`; never commit its contents. `CLIENT_ORIGIN` must be one HTTP(S) origin without a path or trailing slash.
+The process listens on port 5000 by default. Set private Mongo settings in ignored `.env` without overwriting an existing file. `CLIENT_ORIGIN` must be one HTTP(S) origin without a path or trailing slash. Restart after environment changes.
 
-Check http://localhost:5000/books. Expected P00 response: HTTP 503, `success: false`, `error.code: NOT_IMPLEMENTED`. This shows that the server is reachable while honestly reporting that the database-backed catalog is unavailable. `/health` returns 404; no ninth API route is added.
+`GET http://localhost:5000/books` returns real book summaries (an empty array for an empty library). `/health` returns 404; there is no extra health/auth/upload endpoint. Start the Next app on `http://localhost:3000` before protected API requests so its JWKS endpoint is available.
+
+Configure `BETTER_AUTH_JWKS_URL=http://localhost:3000/api/auth/jwks`, `BETTER_AUTH_ISSUER=http://localhost:3000`, and `BETTER_AUTH_AUDIENCE=http://localhost:3000`; issuer/audience must match Next's JWT configuration. Production requires explicit settings and HTTPS JWKS. `jose` 6.2.15 verifies EdDSA signatures, issuer, audience and expiration; issued-at and nonempty subject are required, along with the signed email/display name used for ownership. A cached remote key resolver uses only the configured JWKS URL. Invalid tokens return 401; unavailable key infrastructure returns 503. No tokens or raw driver errors are logged.
+
+The browser obtains a service JWT with `authClient.token()` and sends `Authorization: Bearer …`. The Better Auth session cookie is not an API JWT. Follow the [official Better Auth JWT guide](https://better-auth.com/docs/plugins/jwt) and [jose remote JWKS reference](https://github.com/panva/jose/blob/main/docs/jwks/remote/functions/createRemoteJWKSet.md).
 
 ## MongoDB setup and verification
 
@@ -38,24 +42,27 @@ Current coordination state lives in workspace `../docs/ACTIVE_CONTEXT.md`; exist
 | `npm start` | Run compiled `dist/index.js` |
 | `npm run lint` | ESLint, with no warnings allowed |
 | `npm run typecheck` | Strict checks for runtime, test, and configuration code |
-| `npm test` | Vitest + Supertest baseline checks |
+| `npm test` | Vitest + Supertest unit/contract checks |
+| `npm run api:check` | Opt-in real Next/Atlas acceptance using temporary probe accounts and records |
 
-## Final API contract
+## API contract
 
-| Method | Route | P00 status |
+| Method | Route | P04 behavior |
 | --- | --- | --- |
-| GET | `/books` | Explicit 503 readiness response; database implementation in P04 |
-| GET | `/books/:id` | Not implemented |
-| POST | `/books` | Not implemented |
-| PATCH | `/books/:id` | Not implemented |
-| DELETE | `/books/:id` | Not implemented |
-| POST | `/borrows` | Not implemented |
-| GET | `/borrows` | Not implemented |
-| DELETE | `/borrows/:id` | Not implemented |
+| GET | `/books` | Public summaries; `mine=true` requires JWT; newest first; optional `sort=latest&limit=6` |
+| GET | `/books/:id` | Private full details; 400/401/404 |
+| POST | `/books` | JWT-derived owner/timestamps, initial copies = totalCopies; 201 |
+| PATCH | `/books/:id` | Owner only; transactional inventory checks; 200/403/404/409 |
+| DELETE | `/books/:id` | Owner only; rejects active loans or inconsistent inventory; 200/403/404/409 |
+| POST | `/borrows` | JWT and validated bookId; 404 if missing; otherwise 501 pending P05 |
+| GET | `/borrows` | Only the verified user's active loans; newest first |
+| DELETE | `/borrows/:id` | JWT/ID/borrower checks; 403/404 or 501 pending P05; stock unchanged |
 
-Only book listing is public in the final contract; `mine=true` and the remaining operations require the appropriate authentication/authorization. P00's readiness response contains no book data and is not a completed listing.
+Success responses are `{ success: true, data }`; ObjectIds serialize as hex strings and dates as ISO strings. Book listing includes `_id`, title, author, category, imageUrl, copies, totalCopies and createdAt, without owner email or description. `limit` accepts 1–100; omit it to retrieve all summaries. Unknown query parameters, identity/email filters, malformed IDs, invalid inputs and caller-owned fields return 400. Request book fields are title, author, category, imageUrl, description and totalCopies; PATCH accepts a nonempty subset.
 
-All current API responses use `{ success, message, error: { code } }` for errors. P04 will add the corresponding data envelopes. Malformed JSON returns 400, oversized JSON 413, unknown routes 404, and unexpected errors a sanitized 500. CORS advertises only `CLIENT_ORIGIN`; it does not replace future JWT authentication.
+Failures use `{ success: false, message, error: { code, details? } }`. Validation details contain field/message pairs. Missing/invalid auth is 401, forbidden ownership 403, missing records 404, inventory conflicts 409, malformed JSON 400, oversized bodies 413 and unexpected failures a sanitized 500. Private responses use `Cache-Control: private, no-store`. CORS advertises only `CLIENT_ORIGIN`; it does not replace JWT verification.
+
+P04 verification: `npm test -- tests/jwt.test.ts tests/api-contract.test.ts tests/app.test.ts` runs the 54 focused unit/HTTP checks. `npm run api:check` requires the local Next app, Atlas and dev dependencies. It creates uniquely named temporary users/books/loans, obtains real tokens, exercises CRUD/authorization/inventory conflicts, then verifies removal of only its own probe users/accounts/sessions/books/loans. It prints fixed PASS/FAIL summaries. Unlike P02's aborted probes, these are committed test fixtures removed in `finally`; it never deletes arbitrary library records or prints credentials.
 
 ## Documentation and delivery
 
