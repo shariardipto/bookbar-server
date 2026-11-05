@@ -4,7 +4,9 @@ The separate Express + TypeScript backend for the BookBar online library. Better
 
 **Current phase:** P00 foundation. The HTTP process, configuration validation, structured errors, CORS/security headers, body-size limits, and baseline tests are implemented. MongoDB, JWT, and business endpoints are not implemented yet.
 
-**Live API / GitHub remote:** Not configured. Deployment is scheduled for P08.
+**Live API:** Not deployed; deployment is scheduled for P08. A local `origin` remote is configured. No push is performed during P01.
+
+The client public interface is complete for P01, with explicitly labeled sample data. This API remains at its verified P00 baseline; see the shared implementation log for current project progress. P01 adds no Express routes or business logic.
 
 ## Local setup
 
