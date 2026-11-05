@@ -13,7 +13,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:check": "npm run build && node dist/scripts/check-database.js"
   },
   "dependencies": {
     "cors": "2.8.6",
