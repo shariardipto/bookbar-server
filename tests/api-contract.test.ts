@@ -45,16 +45,8 @@ beforeEach(() => {
   books.patch.mockResolvedValue({ _id: id });
   books.remove.mockResolvedValue({ _id: id });
   borrows.list.mockResolvedValue([]);
-  borrows.create.mockRejectedValue(
-    new ApiError(501, "BORROWING_NOT_READY", "Borrowing is not available yet."),
-  );
-  borrows.remove.mockRejectedValue(
-    new ApiError(
-      501,
-      "RETURNS_NOT_READY",
-      "Returning books is not available yet.",
-    ),
-  );
+  borrows.create.mockResolvedValue({ _id: id, bookId: id, userId: member.id });
+  borrows.remove.mockResolvedValue({ _id: id, bookId: id });
 });
 
 describe("eight-route HTTP contracts (repository and token-verifier stubs)", () => {
@@ -179,7 +171,7 @@ describe("eight-route HTTP contracts (repository and token-verifier stubs)", () 
     ).toBe(200);
     expect(books.remove).toHaveBeenCalledWith(new ObjectId(id), member);
   });
-  it("lists the member's borrows and honestly rejects deferred mutations", async () => {
+  it("lists, creates and returns loans using the verified member identity", async () => {
     expect(
       (
         await request(app)
@@ -195,14 +187,16 @@ describe("eight-route HTTP contracts (repository and token-verifier stubs)", () 
           .auth("valid.test.token", { type: "bearer" })
           .send({ bookId: id })
       ).status,
-    ).toBe(501);
+    ).toBe(201);
     expect(
       (
         await request(app)
           .delete(`/borrows/${id}`)
           .auth("valid.test.token", { type: "bearer" })
       ).status,
-    ).toBe(501);
+    ).toBe(200);
+    expect(borrows.create).toHaveBeenCalledWith(new ObjectId(id), member);
+    expect(borrows.remove).toHaveBeenCalledWith(new ObjectId(id), member);
     expect(
       (
         await request(app)

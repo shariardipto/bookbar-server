@@ -317,7 +317,7 @@ try {
     "active-loan deletion block and safe transactional total-copy edits",
   );
 
-  stage = "borrow read contract and deferred mutation safety";
+  stage = "borrow read, duplicate and return contracts";
   const loans = await request(app)
     .get("/borrows")
     .auth(owner.token, { type: "bearer" });
@@ -332,7 +332,7 @@ try {
         .post("/borrows")
         .auth(owner.token, { type: "bearer" })
         .send({ bookId: id.toHexString() })
-    ).status === 501,
+    ).status === 409,
   );
   ensure(
     (
@@ -354,7 +354,7 @@ try {
       await request(app)
         .delete(`/borrows/${loanIds[0]}`)
         .auth(owner.token, { type: "bearer" })
-    ).status === 501,
+    ).status === 200,
   );
   ensure(
     (
@@ -364,11 +364,11 @@ try {
     ).status === 404,
   );
   ensure(
-    (await books.findOne({ _id: id }))?.copies === 3 &&
-      (await borrows.countDocuments({ _id: { $in: loanIds } })) === 2,
+    (await books.findOne({ _id: id }))?.copies === 4 &&
+      (await borrows.countDocuments({ _id: { $in: loanIds } })) === 1,
   );
   checks.push(
-    "member-only borrow reads, borrower authorization and honest 501 mutations with unchanged stock",
+    "member-only borrow reads, duplicate rejection, borrower authorization and transactional return",
   );
 
   stage = "real owner deletion and logout";
@@ -429,12 +429,10 @@ try {
       .deleteMany({ description, addedByUserId: { $in: memberIds } });
     await db.collection("session").deleteMany({ userId: { $in: memberIds } });
     await db.collection("account").deleteMany({ userId: { $in: memberIds } });
-    await db
-      .collection("user")
-      .deleteMany({
-        _id: { $in: members.map((person) => person._id) },
-        email: { $in: allowedEmails },
-      });
+    await db.collection("user").deleteMany({
+      _id: { $in: members.map((person) => person._id) },
+      email: { $in: allowedEmails },
+    });
     ensure(
       (await db
         .collection("books")

@@ -29,7 +29,7 @@ export function createApp(
   app.use(
     createLibraryRouter(
       dependencies.books ?? createBookService(getDatabase, getMongoClient),
-      dependencies.borrows ?? createBorrowService(getDatabase),
+      dependencies.borrows ?? createBorrowService(getDatabase, getMongoClient),
       requireAuth(dependencies.verifyToken ?? createTokenVerifier(config)),
     ),
   );
