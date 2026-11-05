@@ -14,13 +14,15 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:check": "npm run build && node dist/scripts/check-database.js"
+    "db:check": "npm run build && node dist/scripts/check-database.js",
+    "api:check": "tsx tests/live-api.integration.ts"
   },
   "dependencies": {
     "cors": "2.8.6",
     "dotenv": "18.0.9",
     "express": "5.3.0",
     "helmet": "8.3.0",
+    "jose": "6.2.15",
     "mongodb": "7.8.0",
     "zod": "4.6.7"
   },
