@@ -2,11 +2,13 @@
 
 The separate Express + TypeScript backend for BookBar. Better Auth sessions belong to Next.js; this API verifies service JWTs and enforces ownership and inventory rules.
 
-**Current phase:** P05 DONE. All eight routes are implemented, including transactional borrowing/returns, duplicate prevention, accurate stock, owner/borrower authorization and safe book edits/deletion. Targeted live Atlas concurrency and rollback acceptance passes. The browser library screens connect to these APIs in P06.
+**Status:** Deployed on Render. All eight routes are implemented, including transactional borrowing/returns, duplicate prevention, accurate stock, owner/borrower authorization and safe book edits/deletion. The Vercel client uses the live API; final production verification is in progress.
 
-**Live API:** Not deployed; deployment is scheduled for P08. Changes are committed locally; no push is performed in this phase.
+**Live API:** [bookbar-server.onrender.com/books](https://bookbar-server.onrender.com/books)
+**Live website:** [bookbar-app.vercel.app](https://bookbar-app.vercel.app)
+**Repositories:** [Server](https://github.com/shariardipto/bookbar-server) · [Client](https://github.com/shariardipto/bookbar-client)
 
-The browser catalog still uses labeled fixtures until P06. The API itself now reads and writes real MongoDB records. P03 Google callback/browser refresh acceptance remains a separate pending verification; P04 live tests use real email sessions and Next-issued JWTs.
+Runtime screens read and write real MongoDB records. Production email sessions, JWT/JWKS and private refresh have been checked; a successful Google callback remains a separate pending verification.
 
 ## Local setup
 
@@ -20,6 +22,8 @@ npm run dev
 The process listens on port 5000 by default. Set private Mongo settings in ignored `.env` without overwriting an existing file. `CLIENT_ORIGIN` must be one HTTP(S) origin without a path or trailing slash. Restart after environment changes.
 
 `GET http://localhost:5000/books` returns real book summaries (an empty array for an empty library). `/health` returns 404; there is no extra health/auth/upload endpoint. Start the Next app on `http://localhost:3000` before protected API requests so its JWKS endpoint is available.
+
+In Render's private environment settings, use `CLIENT_ORIGIN=https://bookbar-app.vercel.app`, `BETTER_AUTH_JWKS_URL=https://bookbar-app.vercel.app/api/auth/jwks`, and `BETTER_AUTH_ISSUER` / `BETTER_AUTH_AUDIENCE` equal to `https://bookbar-app.vercel.app`. Set MongoDB credentials privately and allow the deployment's outbound connections in Atlas. Render supplies `PORT`. The first request after idle may take longer while the service starts; the frontend provides loading and retry states.
 
 Configure `BETTER_AUTH_JWKS_URL=http://localhost:3000/api/auth/jwks`, `BETTER_AUTH_ISSUER=http://localhost:3000`, and `BETTER_AUTH_AUDIENCE=http://localhost:3000`; issuer/audience must match Next's JWT configuration. Production requires explicit settings and HTTPS JWKS. `jose` 6.2.15 verifies EdDSA signatures, issuer, audience and expiration; issued-at and nonempty subject are required, along with the signed email/display name used for ownership. A cached remote key resolver uses only the configured JWKS URL. Invalid tokens return 401; unavailable key infrastructure returns 503. No tokens or raw driver errors are logged.
 
@@ -77,4 +81,4 @@ P05 checks: `npm test -- tests/transaction.test.ts tests/api-contract.test.ts` (
 
 ## Documentation and delivery
 
-See [blueprint](docs/BookBar_Master_Blueprint.md), [decisions](docs/DECISIONS.md), [implementation log](docs/IMPLEMENTATION_LOG.md), [handoffs](docs/MANUAL_HANDOFFS.md), [test report](docs/TEST_REPORT.md), and [dependency versions](docs/DEPENDENCIES.md). Target at least 8 meaningful server commits by submission. No real connection URI, API secret, token, or private environment file belongs in Git.
+Submit the [client repository](https://github.com/shariardipto/bookbar-client), [server repository](https://github.com/shariardipto/bookbar-server), and [live website](https://bookbar-app.vercel.app). Internal planning and audit documents are maintained in the workspace. The published server history must contain at least 8 meaningful commits. No real connection URI, API secret, token, or private environment file belongs in Git.
